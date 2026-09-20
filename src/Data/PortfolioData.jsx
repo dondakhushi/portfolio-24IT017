@@ -4,6 +4,8 @@ const PortfolioData = {
   navLinks: [
     { name: "Home", path: "/" },
     { name: "Projects", path: "/projects" },
+    { name: "Tasks", path: "/tasks" },
+    { name: "Login", path: "/login" },
     { name: "Contact", path: "/contact" }
   ],
   

@@ -16,7 +16,7 @@ function Project() {
     setLoading(true);
     setError(null);
 
-    fetch("https://api.github.com/users/dondakhushi111/repos")
+    fetch("https://api.github.com/users/dondakhushi/repos")
       .then((res) => {
         if (!res.ok) {
           throw new Error("Failed to fetch repositories");
