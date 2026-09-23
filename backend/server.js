@@ -8,10 +8,14 @@ const Task = require("./models/Task");
 const authRoutes = require("./routes/authRoutes");
 const authMiddleware = require("./middleware/authMiddleware");
 const validateTask = require("./middleware/validateTask");
+const cache = require("./cache/cache");
 
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+let cacheHits = 0;
+let cacheMisses = 0;
+
+const PORT = process.env.PORT || 5001;
 
 // Middleware
 app.use(cors());
@@ -50,6 +54,31 @@ app.use("/api/auth", authRoutes);
 // GET all tasks
 app.get("/api/tasks", authMiddleware, async (req, res) => {
   try {
+    const cachedTasks = cache.get("all_tasks");
+
+    if (cachedTasks) {
+      cacheHits++;
+      console.log("CACHE HIT: all_tasks");
+      return res.json(cachedTasks);
+    }
+
+    cacheMisses++;
+    console.log("CACHE MISS: all_tasks");
+
+    const tasks = await Task.find().sort({ createdAt: -1 });
+
+    cache.set("all_tasks", tasks);
+
+    res.json(tasks);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/tasks-uncached", authMiddleware, async (req, res) => {
+  try {
     const tasks = await Task.find().sort({ createdAt: -1 });
 
     res.json(tasks);
@@ -58,6 +87,15 @@ app.get("/api/tasks", authMiddleware, async (req, res) => {
       error: error.message,
     });
   }
+});
+
+// CACHE STATISTICS
+app.get("/api/cache/stats", authMiddleware, (req, res) => {
+  res.json({
+    cacheHits,
+    cacheMisses,
+    totalRequests: cacheHits + cacheMisses,
+  });
 });
 
 // GET single task
@@ -80,26 +118,23 @@ app.get("/api/tasks/:id", authMiddleware, async (req, res) => {
 });
 
 // CREATE task
-app.post(
-  "/api/tasks",
-  authMiddleware,
-  validateTask,
-  async (req, res) => {
-    try {
-      const task = await Task.create({
-        title: req.body.title.trim(),
-        description: req.body.description || "",
-        completed: false,
-      });
+app.post("/api/tasks", authMiddleware, validateTask, async (req, res) => {
+  try {
+    const task = await Task.create({
+      title: req.body.title.trim(),
+      description: req.body.description || "",
+      completed: false,
+    });
 
-      res.status(201).json(task);
-    } catch (error) {
-      res.status(500).json({
-        error: error.message,
-      });
-    }
+    cache.del("all_tasks");
+
+    res.status(201).json(task);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+    });
   }
-);
+});
 
 // UPDATE task
 app.put("/api/tasks/:id", authMiddleware, async (req, res) => {
@@ -107,17 +142,14 @@ app.put("/api/tasks/:id", authMiddleware, async (req, res) => {
     const task = await Task.findByIdAndUpdate(
       req.params.id,
       req.body,
-      {
-        new: true,
-        runValidators: true,
-      }
+      { new: true, runValidators: true }
     );
 
     if (!task) {
-      return res.status(404).json({
-        error: "Task not found",
-      });
+      return res.status(404).json({ error: "Task not found" });
     }
+
+    cache.del("all_tasks");
 
     res.json(task);
   } catch (error) {
@@ -133,14 +165,12 @@ app.delete("/api/tasks/:id", authMiddleware, async (req, res) => {
     const task = await Task.findByIdAndDelete(req.params.id);
 
     if (!task) {
-      return res.status(404).json({
-        error: "Task not found",
-      });
+      return res.status(404).json({ error: "Task not found" });
     }
 
-    res.json({
-      message: "Task deleted successfully",
-    });
+    cache.del("all_tasks");
+
+    res.json({ message: "Task deleted successfully" });
   } catch (error) {
     res.status(500).json({
       error: error.message,
