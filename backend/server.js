@@ -10,6 +10,9 @@ const authMiddleware = require("./middleware/authMiddleware");
 const validateTask = require("./middleware/validateTask");
 const cache = require("./cache/cache");
 
+const taskEvents = require("./events");
+require("./listeners");
+
 const app = express();
 
 let cacheHits = 0;
@@ -126,16 +129,31 @@ app.post("/api/tasks", authMiddleware, validateTask, async (req, res) => {
       completed: false,
     });
 
+    // Invalidate Practical 9 cache
     cache.del("all_tasks");
 
+    // Prepare event data
+    const taskData = {
+      ...task.toObject(),
+      assignedUser: req.user.email,
+    };
+
+    // Record API response timestamp
+    console.log(
+      `[API] Response sent at ${new Date().toISOString()}`
+    );
+
+    // Send response immediately
     res.status(201).json(task);
+
+    // Trigger background event processing
+    taskEvents.emit("task-created", taskData);
   } catch (error) {
     res.status(500).json({
       error: error.message,
     });
   }
 });
-
 // UPDATE task
 app.put("/api/tasks/:id", authMiddleware, async (req, res) => {
   try {
@@ -165,12 +183,24 @@ app.delete("/api/tasks/:id", authMiddleware, async (req, res) => {
     const task = await Task.findByIdAndDelete(req.params.id);
 
     if (!task) {
-      return res.status(404).json({ error: "Task not found" });
+      return res.status(404).json({
+        error: "Task not found",
+      });
     }
 
+    // Invalidate Practical 9 cache
     cache.del("all_tasks");
 
-    res.json({ message: "Task deleted successfully" });
+    // Send API response
+    res.json({
+      message: "Task deleted successfully",
+    });
+
+    // Trigger delete event
+    taskEvents.emit("task-deleted", {
+      ...task.toObject(),
+      assignedUser: req.user.email,
+    });
   } catch (error) {
     res.status(500).json({
       error: error.message,
