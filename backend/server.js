@@ -30,15 +30,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// MongoDB connection
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB connected");
-  })
-  .catch((error) => {
-    console.error("MongoDB connection error:", error.message);
-  });
+// // MongoDB connection
+// mongoose
+//   .connect(process.env.MONGO_URI)
+//   .then(() => {
+//     console.log("MongoDB connected");
+//   })
+//   .catch((error) => {
+//     console.error("MongoDB connection error:", error.message);
+//   });
 
 // Root
 app.get("/", (req, res) => {
@@ -224,6 +224,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => {
+      console.log("MongoDB connected");
+
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+      });
+    })
+    .catch((error) => {
+      console.error("MongoDB connection error:", error.message);
+      process.exitCode = 1;
+    });
+}
+
+module.exports = app;
