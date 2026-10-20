@@ -166,3 +166,30 @@ export const getCurrentUser = async () => {
 export const logoutUser = () => {
   localStorage.removeItem("token");
 };
+
+// AI TASK DESCRIPTION
+export const generateTaskDescription = async (title) => {
+  const response = await fetch(
+    `${BASE_URL}/ai/generate-description`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+      },
+      body: JSON.stringify({ title }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const error = new Error(
+      data.message || "Failed to generate description"
+    );
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
+};

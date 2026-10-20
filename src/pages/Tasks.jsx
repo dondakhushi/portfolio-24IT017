@@ -6,6 +6,7 @@ import {
   createTask,
   updateTask,
   deleteTask,
+  generateTaskDescription,
 } from "../api";
 
 function Tasks() {
@@ -20,9 +21,39 @@ function Tasks() {
 
   const navigate = useNavigate();
 
+  const [generatingDescription, setGeneratingDescription] = useState(false);
+const [aiMessage, setAiMessage] = useState("");
+
   const handleLogout = () => {
   logoutUser();
   navigate("/Login");
+};
+
+const handleGenerateDescription = async () => {
+  if (!title.trim()) {
+    setAiMessage("Enter a task title before generating a description.");
+    return;
+  }
+
+  try {
+    setGeneratingDescription(true);
+    setAiMessage("");
+
+    const result = await generateTaskDescription(title);
+
+    setDescription(result.description);
+    setAiMessage(
+      result.fallback
+        ? result.message
+        : "AI-generated suggestion loaded. Please review and edit it."
+    );
+  } catch (err) {
+    setAiMessage(
+      "Could not generate a description. You can still enter one manually."
+    );
+  } finally {
+    setGeneratingDescription(false);
+  }
 };
 
   // Fetch tasks
@@ -164,6 +195,23 @@ function Tasks() {
           }
         />
 
+        <button
+  type="button"
+  onClick={handleGenerateDescription}
+  disabled={generatingDescription}
+>
+  {generatingDescription
+    ? "Generating..."
+    : "Generate description"}
+</button>
+
+<p>
+  AI-generated suggestions may be inaccurate. Review and edit the
+  description before saving your task.
+</p>
+
+{aiMessage && <p role="status">{aiMessage}</p>}
+
         <button type="submit" disabled={saving}>
           {saving ? "Adding..." : "Add Task"}
         </button>
@@ -223,6 +271,7 @@ function Tasks() {
       </div>
     </div>
   );
+  
 
   <button onClick={handleLogout}>
   Logout

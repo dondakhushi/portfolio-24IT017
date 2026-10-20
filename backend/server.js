@@ -208,6 +208,86 @@ app.delete("/api/tasks/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// AI task description generation
+const OpenAI = require("openai");
+
+const aiClient = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "missing-key",
+  timeout: 15000,
+  maxRetries: 0,
+});
+
+const aiRequestTimes = new Map();
+
+app.post("/api/ai/generate-description", async (req, res) => {
+  const { title } = req.body || {};
+
+  if (!title || typeof title !== "string" || !title.trim()) {
+    return res.status(400).json({
+      description: "",
+      fallback: true,
+      message: "Please enter a task title first.",
+    });
+  }
+
+  const cleanTitle = title.trim().slice(0, 200);
+  const now = Date.now();
+  const lastRequest = aiRequestTimes.get(cleanTitle);
+
+  if (lastRequest && now - lastRequest < 60_000) {
+    return res.status(429).json({
+      description: "",
+      fallback: true,
+      message: "Please wait one minute before generating another description for this task.",
+    });
+  }
+
+  // Apply the limit before calling the external service.
+  aiRequestTimes.set(cleanTitle, now);
+
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
+    }
+
+    const completion = await aiClient.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Write a clear, concise task description in 1 to 3 sentences. Do not include private or sensitive information.",
+        },
+        {
+          role: "user",
+          content: `Create a task description for this title: ${cleanTitle}`,
+        },
+      ],
+    });
+
+    const description =
+      completion.choices?.[0]?.message?.content?.trim();
+
+    if (!description) {
+      throw new Error("The AI returned an empty description");
+    }
+
+    return res.json({
+      description,
+      fallback: false,
+    });
+  } catch (error) {
+    console.error("AI description generation failed:", error.message);
+
+    return res.status(200).json({
+      description: `Complete the task "${cleanTitle}" by identifying the required steps, carrying out the work, and checking the result.`,
+      fallback: true,
+      message:
+        "AI suggestions are temporarily unavailable. You can edit this suggested description or write your own.",
+    });
+  }
+});
+
 // 404
 app.use((req, res) => {
   res.status(404).json({
@@ -223,6 +303,7 @@ app.use((err, req, res, next) => {
     error: "Internal server error",
   });
 });
+
 
 if (require.main === module) {
   mongoose

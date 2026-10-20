@@ -33,4 +33,3 @@ jobs:
 
       - name: Run automated tests
         run: npm test
-
